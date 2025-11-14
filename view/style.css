@@ -1,0 +1,52 @@
+.background-tela {
+  -fx-background-image: url("../img/whatsappBackground.png");
+  -fx-background-size: cover;
+  -fx-background-position: center;
+  -fx-background-repeat: no-repeat;
+}
+
+.texto-transmissor {
+  -fx-control-inner-background: #1f272a;
+  -fx-background: #1f272a;
+  -fx-text-fill: #ffffff;
+  -fx-prompt-text-fill: #999999;
+  -fx-background-color: transparent;
+  -fx-border-width: 0;
+  -fx-background-insets: 0;
+  -fx-background-radius: 10%;
+}
+
+.rectangle-receptor {
+  -fx-color: #1f272a;
+  -fx-border-radius: 40%;
+}
+
+.combo-codificacao {
+  -fx-padding: 0 0 0 27px;
+  -fx-text-fill: #ffffff;
+}
+
+.combo-codificacao .arrow-button .arrow {
+  -fx-background-color: #ffffff;
+}
+
+.combo-codificacao .list-cell {
+  -fx-alignment: center;
+  -fx-cursor: hand;
+}
+
+.botao-enviar, .combo-codificacao {
+  -fx-cursor: hand;
+  -fx-background-color: #21C063;
+  -fx-text-alignment: center;
+  -fx-alignment: center;
+  -fx-background-radius: 50;
+  -fx-font-weight: bold;
+}
+
+.texto-binario {
+  -fx-background-color: #ffffff;
+  -fx-text-fill: #1f272a;
+  -fx-border-width: 0;
+  -fx-background-insets: 0;
+}

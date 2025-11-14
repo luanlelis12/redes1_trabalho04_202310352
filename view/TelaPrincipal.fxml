@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.Cursor?>
+<?import javafx.scene.canvas.Canvas?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.TextArea?>
+<?import javafx.scene.image.Image?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.AnchorPane?>
+<?import javafx.scene.layout.Pane?>
+<?import javafx.scene.shape.Line?>
+<?import javafx.scene.shape.QuadCurve?>
+<?import javafx.scene.shape.Rectangle?>
+<?import javafx.scene.text.Font?>
+<?import javafx.scene.text.Text?>
+
+<AnchorPane maxHeight="-Infinity" maxWidth="-Infinity" minHeight="-Infinity" minWidth="-Infinity" prefHeight="800.0" prefWidth="1000.0" styleClass="background-tela" stylesheets="@style.css" xmlns="http://javafx.com/javafx/24.0.1" xmlns:fx="http://javafx.com/fxml/1" fx:controller="controller.ControllerPrincipal">
+   <children>
+      <Line endX="402.39996337890625" endY="1.0" layoutX="360.0" layoutY="399.0" startX="-131.2000274658203" startY="1.0" stroke="WHITE" strokeWidth="3.0" />
+      <Pane layoutX="30.0" layoutY="152.0" prefHeight="495.0" prefWidth="229.0">
+         <children>
+            <ImageView fitHeight="495.0" fitWidth="229.0">
+               <image>
+                  <Image url="@../img/celularTransmissor.png" />
+               </image>
+            </ImageView>
+            <Rectangle arcHeight="10.0" arcWidth="10.0" fill="#1f272a" height="117.0" layoutX="49.0" layoutY="134.0" stroke="BLACK" strokeMiterLimit="0.0" strokeType="INSIDE" strokeWidth="0.0" styleClass="rectangle-receptor" width="162.0" />
+            <QuadCurve controlX="58.0" controlY="-14.800003051757812" endX="32.4000244140625" endY="-0.4000091552734375" fill="#1f272a" layoutX="175.0" layoutY="147.0" startX="27.20001220703125" startY="-12.800003051757812" stroke="#1f272a" strokeType="INSIDE" strokeWidth="0.0" />
+            <TextArea fx:id="textoRecepcaoHostA" editable="false" layoutX="52.0" layoutY="137.0" prefHeight="109.0" prefWidth="156.0" styleClass="texto-transmissor" wrapText="true">
+               <cursor>
+                  <Cursor fx:constant="TEXT" />
+               </cursor>
+            </TextArea>
+            <TextArea fx:id="textoTransmissaoHostA" layoutX="13.0" layoutY="300.0" prefHeight="130.0" prefWidth="174.0" promptText="|Digite aqui" styleClass="texto-transmissor" wrapText="true">
+               <cursor>
+                  <Cursor fx:constant="DEFAULT" />
+               </cursor>
+            </TextArea>
+         </children>
+      </Pane>
+      <Pane layoutX="745.0" layoutY="152.0" prefHeight="495.0" prefWidth="229.0">
+         <children>
+            <ImageView fitHeight="495.0" fitWidth="229.0">
+               <image>
+                  <Image url="@../img/celularReceptor.png" />
+               </image>
+            </ImageView>
+            <Rectangle arcHeight="10.0" arcWidth="10.0" fill="#1f272a" height="117.0" layoutX="39.0" layoutY="124.0" stroke="BLACK" strokeMiterLimit="0.0" strokeType="INSIDE" strokeWidth="0.0" styleClass="rectangle-receptor" width="162.0" />
+            <QuadCurve controlX="58.0" controlY="-14.800003051757812" endX="32.4000244140625" endY="-0.4000091552734375" fill="#1f272a" layoutX="165.0" layoutY="137.0" startX="27.20001220703125" startY="-12.800003051757812" stroke="#1f272a" strokeType="INSIDE" strokeWidth="0.0" />
+            <TextArea fx:id="textoRecepcaoHostB" editable="false" layoutX="42.0" layoutY="127.0" prefHeight="109.0" prefWidth="156.0" styleClass="texto-transmissor" wrapText="true">
+               <cursor>
+                  <Cursor fx:constant="TEXT" />
+               </cursor>
+            </TextArea>
+            <TextArea fx:id="textoTransmissaoHostB" layoutX="14.0" layoutY="300.0" prefHeight="130.0" prefWidth="174.0" promptText="|Digite aqui" styleClass="texto-transmissor" wrapText="true">
+               <cursor>
+                  <Cursor fx:constant="DEFAULT" />
+               </cursor>
+            </TextArea>
+         </children>
+      </Pane>
+      <ComboBox fx:id="comboProtocoloCFisica" layoutX="294.0" layoutY="672.0" onAction="#escolherProtocoloCFisica" prefHeight="34.0" prefWidth="200.0" promptText="CAMADA FISICA" styleClass="combo-codificacao" />
+      <Button fx:id="botaoEnviarHostA" layoutX="45.0" layoutY="655.0" mnemonicParsing="false" onAction="#enviarMensagem" prefHeight="34.0" prefWidth="200.0" styleClass="botao-enviar" text="Enviar" />
+      <Canvas fx:id="canvaAnimacao" height="200.0" layoutX="259.0" layoutY="300.0" width="486.0" />
+      <Text fill="#21c063" layoutX="36.0" layoutY="113.0" stroke="WHITE" strokeType="OUTSIDE" strokeWidth="3.0" style="-fx-font-family: RelishPro;" styleClass="titulo" text="SIMULADOR DE REDES" textAlignment="CENTER" wrappingWidth="927.2000732421875">
+         <font>
+            <Font size="72.0" />
+         </font>
+      </Text>
+      <TextArea fx:id="textoBinario" editable="false" layoutX="278.0" layoutY="500.0" prefHeight="158.0" prefWidth="446.0" styleClass="texto-binario" wrapText="true" />
+      <ComboBox fx:id="comboChanceErro" layoutX="402.0" layoutY="759.0" onAction="#escolherProbabilidadeErro" prefHeight="34.0" prefWidth="200.0" promptText="PROBABILIDADE" styleClass="combo-codificacao" />
+      <ComboBox fx:id="comboEnquadramento" layoutX="510.0" layoutY="672.0" onAction="#escolherEnquadramento" prefHeight="34.0" prefWidth="200.0" promptText="ENQUADRAMENTO" styleClass="combo-codificacao" />
+      <Button fx:id="botaoEnviarHostB" layoutX="760.0" layoutY="655.0" mnemonicParsing="false" onAction="#enviarMensagem" prefHeight="34.0" prefWidth="200.0" styleClass="botao-enviar" text="Enviar" />
+      <ComboBox fx:id="comboControleErro" layoutX="294.0" layoutY="715.0" onAction="#escolherControleErro" prefHeight="34.0" prefWidth="200.0" promptText="CONTROLE DE ERRO" styleClass="combo-codificacao" />
+      <ComboBox fx:id="comboControleFluxo" layoutX="510.0" layoutY="715.0" onAction="#escolherControleFluxo" prefHeight="34.0" prefWidth="200.0" promptText="CONTROLE DE FLUXO" styleClass="combo-codificacao" />
+   </children>
+</AnchorPane>

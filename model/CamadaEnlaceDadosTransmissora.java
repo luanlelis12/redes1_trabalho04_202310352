@@ -25,6 +25,8 @@ public class CamadaEnlaceDadosTransmissora {
   private int tipoDeControleDeErro = 0;
   private int tipoDeControleDeFluxo = 0;
 
+  private int numDeSequencia = -1;
+
   private volatile boolean esperandoAck = false;
   private final Object lock = new Object();
   private static final long TIMEOUT_MS = 1000; // 1 segundos de timeout
@@ -81,9 +83,12 @@ public class CamadaEnlaceDadosTransmissora {
   *************************************************************** */
   public void camadaEnlaceDadosTransmissora(int quadro[]) {
 
+    quadro = inserirNumeroDeSequencia(quadro);
     quadro = camadaEnlaceDadosTransmissoraEnquadramento(quadro);
     quadro = camadaEnlaceDadosTransmissoraControleDeErro(quadro);
-    camadaEnlaceDadosTransmissoraControleDeFluxo(quadro);
+    ConversorStringBinario.exibirBits(quadro);
+    // camadaEnlaceDadosTransmissoraControleDeFluxo(quadro);
+    camadaFisicaTransmissora.camadaFisicaTransmissora(quadro);
 
   }// fim do metodo camadaEnlaceDadosTransmissora
 
@@ -104,7 +109,7 @@ public class CamadaEnlaceDadosTransmissora {
       case 2 : //insercao de bits
         quadro = camadaEnlaceDadosTransmissoraEnquadramentoInsercaoDeBits(quadro);
         break;
-      case 3 : //violacao da camada fisicaquadroEnquadrado =
+      case 3 : //violacao da camada fisica
         // camadaDeEnlaceTransmissoraEnquadramentoViolacaoCamadaFisica(quadro);
         break;
     }//fim do switch/case
@@ -154,39 +159,39 @@ public class CamadaEnlaceDadosTransmissora {
         break; 
     }//fim do switch/case
 
-    synchronized (lock) {
-      // Se ja estiver esperando um ACK, a camada de aplicacao ficara bloqueada aqui
-      while (esperandoAck) {
-        try {
-          System.out.println("Transmissor: Bloqueado. Esperando ACK anterior...");
-          lock.wait();
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
-          return;
-        } // fim do try/catch
-      } // fim do while
+    // synchronized (lock) {
+    //   // Se ja estiver esperando um ACK, a camada de aplicacao ficara bloqueada aqui
+    //   while (esperandoAck) {
+    //     try {
+    //       System.out.println("Transmissor: Bloqueado. Esperando ACK anterior...");
+    //       lock.wait();
+    //     } catch (InterruptedException e) {
+    //       Thread.currentThread().interrupt();
+    //       return;
+    //     } // fim do try/catch
+    //   } // fim do while
 
-      // Marca que esperando um ack
-      this.esperandoAck = true;
-      System.out.println("Transmissor: Iniciando envio do quadro.");
+    //   // Marca que esperando um ack
+    //   this.esperandoAck = true;
+    //   System.out.println("Transmissor: Iniciando envio do quadro.");
       
-      // Envia os dados e inicia o timer
-      enviarEIniciarTimer(quadro);
+    //   // Envia os dados e inicia o timer
+    //   enviarEIniciarTimer(quadro);
 
-      // Espera pelo ACK e a thread da aplicacao fica parada aqui
-      while (esperandoAck) {
-        try {
-          // Espera ser notificado pelo ACK ou pelo timeout
-          lock.wait();
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
-          break;
-        } // fim do try/catch
-      } // fim do while
+    //   // Espera pelo ACK e a thread da aplicacao fica parada aqui
+    //   while (esperandoAck) {
+    //     try {
+    //       // Espera ser notificado pelo ACK ou pelo timeout
+    //       lock.wait();
+    //     } catch (InterruptedException e) {
+    //       Thread.currentThread().interrupt();
+    //       break;
+    //     } // fim do try/catch
+    //   } // fim do while
 
-      // Quando sair do loop, ou o ACK chegou ou o envio foi interrompido
-      System.out.println("Transmissor: Envio concluido. Desbloqueando aplicacao.");
-    }
+    //   // Quando sair do loop, ou o ACK chegou ou o envio foi interrompido
+    //   System.out.println("Transmissor: Envio concluido. Desbloqueando aplicacao.");
+    // }
   } //fim do metodo camadaEnlaceDadosTransmissoraControleDeFluxo
 
   /* ***************************************************************
@@ -204,11 +209,11 @@ public class CamadaEnlaceDadosTransmissora {
     // Itera pelos 4 bytes do pacote, da esquerda (j=3) para a direita (j=0)
     for (int j = 3; j >= 0; j--) {
       int byteAtual = (pacoteDeDados >> (j * 8)) & 0xFF;
-      if (byteAtual != 0) {
-        numeroDeBytesDeDados++;
-      } else {
+      if (byteAtual == 0 & j != 3) {
         // Encontrou o primeiro '0', para de contar.
         break;
+      } else {
+        numeroDeBytesDeDados++;
       } // fim do if
     } // fim do for
 
@@ -650,12 +655,13 @@ public class CamadaEnlaceDadosTransmissora {
   * Parametros: 
   * Retorno: void
   *************************************************************** */
-  public void enviarAck() {
-    final int QUADRO_ACK = 0xACBACBAC;
+  public void enviarAck(int[] quadro) {
     int[] quadroAck = new int[1];
-    quadroAck[0] = QUADRO_ACK;
+    quadroAck[0] = 0x80000000;
+    quadroAck[0] |= quadro[0] & 0xFF000000;
 
     // faz o controle de erro no ack
+    quadroAck = camadaEnlaceDadosTransmissoraEnquadramento(quadroAck);
     quadroAck = camadaEnlaceDadosTransmissoraControleDeErro(quadroAck);
     camadaFisicaTransmissora.camadaFisicaTransmissora(quadroAck);
   } // fim do metodo enviarAck 
@@ -666,7 +672,7 @@ public class CamadaEnlaceDadosTransmissora {
   * Parametros: quadro = conjunto de bits da mensagem
   * Retorno: int[]
   *************************************************************** */
-  int[] camadaEnlaceDadosTransmissoraJanelaDeslizanteUmBit (int quadro []) {
+  public int[] camadaEnlaceDadosTransmissoraJanelaDeslizanteUmBit (int quadro []) {
     //implementacao do algoritmo
     return quadro;
   }//fim do metodo camadaEnlaceDadosTransmissoraJanelaDeslizanteUmBit
@@ -677,7 +683,7 @@ public class CamadaEnlaceDadosTransmissora {
   * Parametros: quadro = conjunto de bits da mensagem
   * Retorno: int[]
   *************************************************************** */
-  int[] camadaEnlaceDadosTransmissoraJanelaDeslizanteGoBackN (int quadro []) {
+  public int[] camadaEnlaceDadosTransmissoraJanelaDeslizanteGoBackN (int quadro []) {
     //implementacao do algoritmo
     return quadro;
   }//fim do metodo camadaEnlaceDadosTransmissoraJanelaDeslizanteGoBackN
@@ -688,8 +694,41 @@ public class CamadaEnlaceDadosTransmissora {
   * Parametros: quadro = conjunto de bits da mensagem
   * Retorno: int[]
   *************************************************************** */
-  int[] camadaEnlaceDadosTransmissoraJanelaDeslizanteComRetransmissaoSeletiva (int quadro []) {
+  public int[] camadaEnlaceDadosTransmissoraJanelaDeslizanteComRetransmissaoSeletiva (int quadro []) {
     //implementacao do algoritmo
     return quadro;
   }//fim do metodo camadaEnlaceDadosTransmissoraJanelaDeslizanteComRetransmissaoSeletiva
+
+  public int[] inserirNumeroDeSequencia(int[] quadro) {
+    numDeSequencia=(numDeSequencia+1)%8;
+    
+    final int QUANTIDADE_BIT_ESCRITA = 8; // 1 (ACK/DADO) + 7 (Numero de sequencia)
+    final int QUANTIDADE_TOTAL_BITS = (quadro[0] == 0 ? 0 : quadro.length*32); // Se for um pacote vazio (ACK antigo?), nao le
+    final int NOVA_QUANTIDADE_TOTAL_BITS = QUANTIDADE_TOTAL_BITS+QUANTIDADE_BIT_ESCRITA;
+
+    int[] quadroComSequencia = new int[(NOVA_QUANTIDADE_TOTAL_BITS+31)/32];
+
+    // --- O NOVO PROTOCOLO ---
+    // Bit 31: 0 = DADOS
+    // Bit 30-24: Numero de Sequencia (0-7)
+    // (O bit 31 ja e 0, entao so setamos o NS)
+    quadroComSequencia[0] |= numDeSequencia << 24;
+    // --- FIM DO PROTOCOLO ---
+
+    int bitDeSaida = QUANTIDADE_BIT_ESCRITA; // Comeca a escrever DEPOIS dos 5 bits
+
+    for (int i = 0; i < QUANTIDADE_TOTAL_BITS; i++) {
+      // ... (o resto do seu loop de copia esta CORRETO) ...
+      int indiceArrayEntrada = i / 32;
+      int bitPosEntrada = 31 - (i % 32);
+      int bit = (quadro[indiceArrayEntrada] >> bitPosEntrada) & 1;
+      if (bit == 1) {
+        int indiceArray = bitDeSaida / 32;
+        int bitPos = 31 - (bitDeSaida % 32);
+        quadroComSequencia[indiceArray] |= (1 << bitPos);
+      }
+      bitDeSaida++;
+    }
+    return quadroComSequencia;
+  }
 }

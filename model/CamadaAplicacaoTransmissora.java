@@ -31,7 +31,7 @@ public class CamadaAplicacaoTransmissora {
   public void camadaDeAplicacaoTransmissora (String mensagem) {
     Auxiliar auxiliar = new Auxiliar();
     // Define o tamanho dos pacotes em 4 caracteres
-    int tamanhoDoPacote = 4;
+    int tamanhoDoPacote = 3;
 
     // Cria uma lista com a mensagem dividida em pacotes de 4 caracteres
     List<String> pacotesGerados = auxiliar.segmentarMensagem(mensagem, tamanhoDoPacote);

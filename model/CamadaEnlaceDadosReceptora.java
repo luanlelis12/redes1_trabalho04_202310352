@@ -91,17 +91,18 @@ public class CamadaEnlaceDadosReceptora {
       erroNoQuadro=false;
       return;
     } // fim do if
-
+    
+    quadro = camadaEnlaceDadosReceptoraEnquadramento(quadro);
+    
     quadro = camadaEnlaceDadosReceptoraControleDeFluxo(quadro);
     if (quadro == null) {
       // Era um ACK, ja foi processado. Nao faz mais nada.
       return;
     } // fim do if
-
     System.out.println("Receptor: Quadro OK. Enviando ACK...");
-    meuTransmissor.enviarAck();
-
-    quadro = camadaEnlaceDadosReceptoraEnquadramento(quadro);
+    meuTransmissor.enviarAck(quadro);
+    
+    quadro = retirarNumeroDeSequencia(quadro);
 
     // Chama a proxima camada
     camadaAplicacaoReceptora.camadaAplicacaoReceptora(quadro);
@@ -165,29 +166,30 @@ public class CamadaEnlaceDadosReceptora {
       return null; // Se o quadro for nulo, apenas repassa o nulo.
     } // fim do if
 
-    final int QUADRO_ACK = 0xACBACBAC; // Valor padrao do ACK
+    int bitVerificacaoAck = quadro[0] >>> 31;
 
-    if (quadro[0] == QUADRO_ACK) {
+    if (bitVerificacaoAck == 1) {
       System.out.println("Receptor: ACK detectado.");
-      if (meuTransmissor != null) {
-        // Notifica o transmissor do *nosso* host que o ACK chegou
-        meuTransmissor.receberAck();
-      } // fim do if
+      // if (meuTransmissor != null) {
+      //   // Notifica o transmissor do *nosso* host que o ACK chegou
+      //   meuTransmissor.receberAck();
+      // } // fim do if
       return null; // Retorna nulo para sinalizar que era um ACK
     } // fim do if
+    System.out.println("Receptor: Quadro detectado.");
     
-    switch (tipoDeControleDeErro) {
-      case 0 : //protocolo de janela deslizante de 1 bit
-        //codigo
-        break;
-      case 1 : //protocolo de janela deslizante go-back-n
-        //codigo
-        break;
-      case 2 : //protocolo de janela deslizante com retransmissão seletiva
-        //codigo
-        break; 
-    }//fim do switch/case
-    // Se nao era um ACK, retorna o quadro para processamento normal
+    // switch (tipoDeControleDeErro) {
+    //   case 0 : //protocolo de janela deslizante de 1 bit
+    //     //codigo
+    //     break;
+    //   case 1 : //protocolo de janela deslizante go-back-n
+    //     //codigo
+    //     break;
+    //   case 2 : //protocolo de janela deslizante com retransmissão seletiva
+    //     //codigo
+    //     break; 
+    // }//fim do switch/case
+    // // Se nao era um ACK, retorna o quadro para processamento normal
     return quadro;
   } // fim do metodo camadaEnlaceDadosReceptoraControleDeFluxo
 
@@ -630,5 +632,14 @@ public class CamadaEnlaceDadosReceptora {
     //implementacao do algoritmo
     return quadro;
   }//fim do camadaEnlaceDadosReceptoraJanelaDeslizanteComRetransmissaoSeletiva
+  
+  private int[] retirarNumeroDeSequencia(int[] quadro) {
+    
+    int[] quadroSemSequencia = new int[1];
+    
+    quadroSemSequencia[0] = quadro[0] << 8;
+
+    return quadroSemSequencia;
+  }
 
 }

@@ -10,8 +10,11 @@
 package model;
 
 import util.ConversorStringBinario;
+import util.JanelaDeslizante;
 import util.TabelaCRC;
 
+import java.util.LinkedList;
+import java.util.Queue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -24,6 +27,9 @@ public class CamadaEnlaceDadosTransmissora {
   private int tipoDeEnquadramento = 0;
   private int tipoDeControleDeErro = 0;
   private int tipoDeControleDeFluxo = 0;
+
+  private Queue<int[]> filaDeEspera = new LinkedList<>();
+  private JanelaDeslizante janelaDeslizanteTransmissora;
 
   private int numDeSequencia = -1;
 
@@ -86,9 +92,7 @@ public class CamadaEnlaceDadosTransmissora {
     quadro = inserirNumeroDeSequencia(quadro);
     quadro = camadaEnlaceDadosTransmissoraEnquadramento(quadro);
     quadro = camadaEnlaceDadosTransmissoraControleDeErro(quadro);
-    ConversorStringBinario.exibirBits(quadro);
-    // camadaEnlaceDadosTransmissoraControleDeFluxo(quadro);
-    camadaFisicaTransmissora.camadaFisicaTransmissora(quadro);
+    camadaEnlaceDadosTransmissoraControleDeFluxo(quadro);
 
   }// fim do metodo camadaEnlaceDadosTransmissora
 
@@ -149,16 +153,17 @@ public class CamadaEnlaceDadosTransmissora {
   public void camadaEnlaceDadosTransmissoraControleDeFluxo (int quadro []) {
     switch (tipoDeControleDeErro) {
       case 0 : //protocolo de janela deslizante de 1 bit
-        //codigo
+        camadaEnlaceDadosTransmissoraJanelaDeslizanteUmBit(quadro);
         break;
       case 1 : //protocolo de janela deslizante go-back-n
-        //codigo
+        camadaEnlaceDadosTransmissoraJanelaDeslizanteGoBackN(quadro);
         break;
       case 2 : //protocolo de janela deslizante com retransmissão seletiva
         //codigo
         break; 
     }//fim do switch/case
-
+    // Envia o quadro para camada 
+    camadaFisicaTransmissora.camadaFisicaTransmissora(quadro);
     // synchronized (lock) {
     //   // Se ja estiver esperando um ACK, a camada de aplicacao ficara bloqueada aqui
     //   while (esperandoAck) {
@@ -670,11 +675,10 @@ public class CamadaEnlaceDadosTransmissora {
   * Metodo: camadaEnlaceDadosTransmissoraJanelaDeslizanteUmBit
   * Funcao: realiza o controle de fluxo pelo metodo da janela deslizante de um bit
   * Parametros: quadro = conjunto de bits da mensagem
-  * Retorno: int[]
+  * Retorno: void
   *************************************************************** */
-  public int[] camadaEnlaceDadosTransmissoraJanelaDeslizanteUmBit (int quadro []) {
+  public void camadaEnlaceDadosTransmissoraJanelaDeslizanteUmBit (int quadro []) {
     //implementacao do algoritmo
-    return quadro;
   }//fim do metodo camadaEnlaceDadosTransmissoraJanelaDeslizanteUmBit
   
   /* ***************************************************************

@@ -687,9 +687,11 @@ public class CamadaEnlaceDadosTransmissora {
   * Parametros: quadro = conjunto de bits da mensagem
   * Retorno: int[]
   *************************************************************** */
-  public int[] camadaEnlaceDadosTransmissoraJanelaDeslizanteGoBackN (int quadro []) {
-    //implementacao do algoritmo
-    return quadro;
+  public void camadaEnlaceDadosTransmissoraJanelaDeslizanteGoBackN (int quadro []) {
+    filaDeEspera.add(quadro);
+
+
+    
   }//fim do metodo camadaEnlaceDadosTransmissoraJanelaDeslizanteGoBackN
   
   /* ***************************************************************

@@ -46,4 +46,8 @@ public class JanelaDeslizante {
     } // fim do if
   }
 
+  public void enviarQuadro(int[] quadro, int numDeSequencia) {
+
+  }
+
 }

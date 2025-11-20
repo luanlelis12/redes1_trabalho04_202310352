@@ -22,6 +22,7 @@ public class CamadaEnlaceDadosReceptora {
   private int tipoDeControleDeFluxo = 0;
 
   private boolean erroNoQuadro = false;
+  private int proximoQuadroEsperado = 0;
 
   private CamadaAplicacaoReceptora camadaAplicacaoReceptora;
   // referencia ao transmissor do mesmo host (para enviar ACKs)
@@ -96,11 +97,9 @@ public class CamadaEnlaceDadosReceptora {
     
     quadro = camadaEnlaceDadosReceptoraControleDeFluxo(quadro);
     if (quadro == null) {
-      // Era um ACK, ja foi processado. Nao faz mais nada.
+      // Era um ACK ou um quadro duplicado/descartado pelo controle de fluxo. Nao faz mais nada.
       return;
     } // fim do if
-    System.out.println("Receptor: Quadro OK. Enviando ACK...");
-    meuTransmissor.enviarAck(quadro);
     
     quadro = retirarNumeroDeSequencia(quadro);
 
@@ -166,30 +165,18 @@ public class CamadaEnlaceDadosReceptora {
       return null; // Se o quadro for nulo, apenas repassa o nulo.
     } // fim do if
 
-    int bitVerificacaoAck = quadro[0] >>> 31;
-
-    if (bitVerificacaoAck == 1) {
-      System.out.println("Receptor: ACK detectado.");
-      // if (meuTransmissor != null) {
-      //   // Notifica o transmissor do *nosso* host que o ACK chegou
-      //   meuTransmissor.receberAck();
-      // } // fim do if
-      return null; // Retorna nulo para sinalizar que era um ACK
-    } // fim do if
-    System.out.println("Receptor: Quadro detectado.");
-    
-    // switch (tipoDeControleDeErro) {
-    //   case 0 : //protocolo de janela deslizante de 1 bit
-    //     //codigo
-    //     break;
-    //   case 1 : //protocolo de janela deslizante go-back-n
-    //     //codigo
-    //     break;
-    //   case 2 : //protocolo de janela deslizante com retransmissão seletiva
-    //     //codigo
-    //     break; 
-    // }//fim do switch/case
-    // // Se nao era um ACK, retorna o quadro para processamento normal
+    switch (tipoDeControleDeFluxo) {
+      case 0 : //protocolo de janela deslizante de 1 bit
+        quadro = camadaEnlaceDadosReceptoraJanelaDeslizanteUmBit(quadro);
+        break;
+      case 1 : //protocolo de janela deslizante go-back-n
+        //codigo
+        break;
+      case 2 : //protocolo de janela deslizante com retransmissão seletiva
+        //codigo
+        break; 
+    }//fim do switch/case
+    // Se nao era um ACK, retorna o quadro para processamento normal
     return quadro;
   } // fim do metodo camadaEnlaceDadosReceptoraControleDeFluxo
 
@@ -606,9 +593,51 @@ public class CamadaEnlaceDadosReceptora {
   * Parametros: quadro = conjunto de bits da mensagem
   * Retorno: int[]
   *************************************************************** */
-  int[] camadaEnlaceDadosReceptoraJanelaDeslizanteUmBit (int quadro []) {
-    //implementacao do algoritmo
-    return quadro;
+  public int[] camadaEnlaceDadosReceptoraJanelaDeslizanteUmBit (int quadro []) {
+    
+    int bitVerificacaoAck = quadro[0] >>> 31;
+
+    // Se for um ACK, notifica o transmissor deste HOST
+    if (bitVerificacaoAck == 1) {
+      System.out.println("Receptor: ACK detectado.");
+      if (meuTransmissor != null) {
+        // Notifica o transmissor do *nosso* host que o ACK chegou
+        meuTransmissor.receberAck(quadro); // Passa o quadro ACK
+      } // fim do if
+      return null; // Retorna nulo para sinalizar que era um ACK
+    } // fim do if
+    
+    // Extrai o numero de sequencia do quadro (bits 30-24).
+    int ns = (quadro[0] >>> 24) & 0x7F; // Extrai os 7 bits de NS
+    int ns_bit = ns % 2; // O bit de sequencia (0 ou 1)
+    int pe_bit = proximoQuadroEsperado % 2; // O bit de sequencia esperado (0 ou 1)
+
+    System.out.println("Receptor: Quadro DADOS detectado (NS=" + ns_bit + " vs Esperado=" + pe_bit + ")");
+
+    if (ns_bit == pe_bit) {
+      // Quadro é o esperado.
+      System.out.println("Receptor: Quadro OK. Enviando ACK para #" + (pe_bit + 1) % 2);
+        
+      // 1. Envia ACK para o proximo esperado (NR = NS+1)
+      meuTransmissor.enviarAck((pe_bit + 1) % 2); 
+        
+      // 2. Desliza a janela
+      proximoQuadroEsperado = (proximoQuadroEsperado + 1) % 2; 
+        
+      // 3. Retorna o quadro para as proximas camadas
+      return quadro;
+
+    } else {
+      // Quadro duplicado.
+      // 1. Descarta o quadro
+      System.out.println("Receptor: Quadro Duplicado (NS=" + ns_bit + "). Descartando e re-enviando ACK para #" + pe_bit);
+        
+      // 2. Re-envia ACK para o quadro que AINDA esta sendo esperado (o pe_bit)
+      meuTransmissor.enviarAck(pe_bit); 
+        
+      // 3. Retorna nulo (quadro descartado)
+      return null;
+    } // fim do if
   }//fim do metodo camadaEnlaceDadosReceptoraJanelaDeslizanteUmBit
   
   /* ***************************************************************
@@ -617,9 +646,8 @@ public class CamadaEnlaceDadosReceptora {
   * Parametros: quadro = conjunto de bits da mensagem
   * Retorno: int[]
   *************************************************************** */
-  int[] camadaEnlaceDadosReceptoraJanelaDeslizanteGoBackN (int quadro []) {
+  public void camadaEnlaceDadosReceptoraJanelaDeslizanteGoBackN (int quadro []) {
     //implementacao do algoritmo
-    return quadro;
   }//fim do metodo camadaEnlaceDadosReceptoraJanelaDeslizanteGoBackN
   
   /* ***************************************************************
@@ -628,9 +656,8 @@ public class CamadaEnlaceDadosReceptora {
   * Parametros: quadro = conjunto de bits da mensagem
   * Retorno: int[]
   *************************************************************** */
-  int[] camadaEnlaceDadosReceptoraJanelaDeslizanteComRetransmissaoSeletiva (int quadro []) {
+  public void camadaEnlaceDadosReceptoraJanelaDeslizanteComRetransmissaoSeletiva (int quadro []) {
     //implementacao do algoritmo
-    return quadro;
   }//fim do camadaEnlaceDadosReceptoraJanelaDeslizanteComRetransmissaoSeletiva
   
   private int[] retirarNumeroDeSequencia(int[] quadro) {

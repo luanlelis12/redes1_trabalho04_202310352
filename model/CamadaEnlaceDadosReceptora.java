@@ -22,11 +22,16 @@ public class CamadaEnlaceDadosReceptora {
   private int tipoDeControleDeFluxo = 0;
 
   private boolean erroNoQuadro = false;
-  private int proximoQuadroEsperado = 0;
+  private int nsEsperado = 0;
 
   private CamadaAplicacaoReceptora camadaAplicacaoReceptora;
   // referencia ao transmissor do mesmo host (para enviar ACKs)
   private CamadaEnlaceDadosTransmissora meuTransmissor;
+
+  public void reset() {
+    erroNoQuadro = false;
+    nsEsperado = 0;
+  } // fim do metodo reset
 
   public CamadaEnlaceDadosReceptora (CamadaAplicacaoReceptora camadaAplicacaoReceptora) {
     this.camadaAplicacaoReceptora = camadaAplicacaoReceptora;
@@ -608,34 +613,25 @@ public class CamadaEnlaceDadosReceptora {
     } // fim do if
     
     // Extrai o numero de sequencia do quadro (bits 30-24).
-    int ns = (quadro[0] >>> 24) & 0x7F; // Extrai os 7 bits de NS
-    int ns_bit = ns % 2; // O bit de sequencia (0 ou 1)
-    int pe_bit = proximoQuadroEsperado % 2; // O bit de sequencia esperado (0 ou 1)
+    int nsRecebido = (quadro[0] >>> 24) & 0x7F; // Extrai os 7 bits de NS
 
-    System.out.println("Receptor: Quadro DADOS detectado (NS=" + ns_bit + " vs Esperado=" + pe_bit + ")");
+    System.out.println("Receptor: Quadro DADOS detectado (NS=" + nsRecebido + " vs Esperado=" + nsEsperado + ")");
 
-    if (ns_bit == pe_bit) {
+    if (nsRecebido == nsEsperado) {
       // Quadro é o esperado.
-      System.out.println("Receptor: Quadro OK. Enviando ACK para #" + ns_bit);
+      nsEsperado = (nsEsperado + 1) % 8;
+      
+      System.out.println("Receptor: Quadro OK. Enviando ACK para #" + nsRecebido);
+      
+      meuTransmissor.enviarAck(nsEsperado); 
         
-      // 1. Envia ACK para o proximo esperado (NR = NS+1)
-      meuTransmissor.enviarAck(pe_bit); 
-        
-      // 2. Desliza a janela
-      proximoQuadroEsperado = (proximoQuadroEsperado + 1) % 2; 
-        
-      // 3. Retorna o quadro para as proximas camadas
       return quadro;
 
     } else {
-      // Quadro duplicado.
-      // 1. Descarta o quadro
-      System.out.println("Receptor: Quadro Duplicado (NS=" + ns_bit + "). Descartando e re-enviando ACK para #" + pe_bit);
+      System.out.println("Receptor: Quadro errado (NS=" + nsRecebido + "). Descartando e re-enviando ACK para #" + nsEsperado);
         
-      // 2. Re-envia ACK para o quadro que AINDA esta sendo esperado (o pe_bit)
-      meuTransmissor.enviarAck(pe_bit); 
+      meuTransmissor.enviarAck(nsEsperado); 
         
-      // 3. Retorna nulo (quadro descartado)
       return null;
     } // fim do if
   }//fim do metodo camadaEnlaceDadosReceptoraJanelaDeslizanteUmBit

@@ -28,7 +28,7 @@ public class CamadaEnlaceDadosTransmissora {
   private int numDeSequencia = -1; // Proximo quadro a ser enviado (0 ou 1)
   private int[] ultimoQuadroEnviado = null; // Armazena o ultimo quadro enviado para retransmissao
   
-  private int ack_esperado = 0;
+  private int ack_esperado = 1;
 
   private volatile boolean esperandoAck = false;
   private final Object lock = new Object();
@@ -37,6 +37,15 @@ public class CamadaEnlaceDadosTransmissora {
   // Executor para agendar a tarefa de timeout
   private ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
   private ScheduledFuture<?> timerHandle;
+
+  public void reset() {
+    numDeSequencia = -1;
+    esperandoAck = false;
+    ack_esperado = 1;
+    if (timerHandle != null) {
+      timerHandle.cancel(false);
+    }
+  } // fim do metodo reset
 
   /* ***************************************************************
   * Metodo: CamadaEnlaceDadosTransmissora
@@ -161,40 +170,6 @@ public class CamadaEnlaceDadosTransmissora {
         //codigo
         break; 
     }//fim do switch/case
-
-    // synchronized (lock) {
-    //   // Se ja estiver esperando um ACK, a camada de aplicacao ficara bloqueada aqui
-    //   while (esperandoAck) {
-    //     try {
-    //       System.out.println("Transmissor: Bloqueado. Esperando ACK anterior...");
-    //       lock.wait();
-    //     } catch (InterruptedException e) {
-    //       Thread.currentThread().interrupt();
-    //       return;
-    //     } // fim do try/catch
-    //   } // fim do while
-
-    //   // Marca que esperando um ack
-    //   this.esperandoAck = true;
-    //   System.out.println("Transmissor: Iniciando envio do quadro.");
-      
-    //   // Envia os dados e inicia o timer
-    //   enviarEIniciarTimer(quadro);
-
-    //   // Espera pelo ACK e a thread da aplicacao fica parada aqui
-    //   while (esperandoAck) {
-    //     try {
-    //       // Espera ser notificado pelo ACK ou pelo timeout
-    //       lock.wait();
-    //     } catch (InterruptedException e) {
-    //       Thread.currentThread().interrupt();
-    //       break;
-    //     } // fim do try/catch
-    //   } // fim do while
-
-    //   // Quando sair do loop, ou o ACK chegou ou o envio foi interrompido
-    //   System.out.println("Transmissor: Envio concluido. Desbloqueando aplicacao.");
-    // }
   } //fim do metodo camadaEnlaceDadosTransmissoraControleDeFluxo
 
   /* ***************************************************************
@@ -647,13 +622,11 @@ public class CamadaEnlaceDadosTransmissora {
       } // fim do if
 
       // Extrai o numero de sequencia do ACK (bits 30-24).
-      int nr = (quadroAck[0] >>> 24) & 0x7F; // Extrai os 7 bits de NR
-      int nr_bit = nr % 2; // O bit de sequencia do ACK (0 ou 1)
-      int ns_bit = numDeSequencia % 2; // O bit do quadro que ESTAVA sendo esperado
+      int nr_bit = (quadroAck[0] >>> 24) & 0x7F; // Extrai os 7 bits de NR
       
       if (nr_bit == ack_esperado) {
           System.out.println("Transmissor: ACK Recebido OK (NR=" + nr_bit + ")!");
-          ack_esperado = (ack_esperado + 1) % 2; 
+          ack_esperado = (ack_esperado + 1) % 8; 
           esperandoAck = false; // Para de esperar
           if (timerHandle != null) {
             timerHandle.cancel(false); // Cancela o timer de timeout
@@ -713,7 +686,7 @@ public class CamadaEnlaceDadosTransmissora {
         // Marca que esperando um ack
         this.esperandoAck = true;
         // Para S/W, o NS e sempre 0 ou 1.
-        System.out.println("Transmissor: Iniciando envio do quadro #" + (numDeSequencia % 2));
+        System.out.println("Transmissor: Iniciando envio do quadro #" + (numDeSequencia));
         
         // Envia os dados e inicia o timer
         enviarEIniciarTimer(quadro);

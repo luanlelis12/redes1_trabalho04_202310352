@@ -427,6 +427,7 @@ public class ControllerPrincipal implements Initializable {
   @FXML
   public void enviarMensagem(ActionEvent event) {
     if (event.getSource() instanceof Button) {
+      System.out.println("-------------------- NOVA MENSAGEM --------------------");
       this.exibirCodificacao();
       // Botao de enviar de cada host
       Button botaoClicado = (Button) event.getSource();

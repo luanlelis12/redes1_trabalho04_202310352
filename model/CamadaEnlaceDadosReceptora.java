@@ -616,10 +616,10 @@ public class CamadaEnlaceDadosReceptora {
 
     if (ns_bit == pe_bit) {
       // Quadro é o esperado.
-      System.out.println("Receptor: Quadro OK. Enviando ACK para #" + (pe_bit + 1) % 2);
+      System.out.println("Receptor: Quadro OK. Enviando ACK para #" + ns_bit);
         
       // 1. Envia ACK para o proximo esperado (NR = NS+1)
-      meuTransmissor.enviarAck((pe_bit + 1) % 2); 
+      meuTransmissor.enviarAck(pe_bit); 
         
       // 2. Desliza a janela
       proximoQuadroEsperado = (proximoQuadroEsperado + 1) % 2; 

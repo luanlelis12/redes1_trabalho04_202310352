@@ -621,7 +621,7 @@ public class CamadaEnlaceDadosReceptora {
       // Quadro é o esperado.
       nsEsperado = (nsEsperado + 1) % 8;
       
-      System.out.println("Receptor: Quadro OK. Enviando ACK para #" + nsRecebido);
+      System.out.println("Receptor: Quadro OK. Enviando ACK para #" + nsEsperado);
       
       meuTransmissor.enviarAck(nsEsperado); 
         

@@ -46,9 +46,8 @@ public class JanelaDeslizante {
       proximoSeqNum = tamanhoJanela;
     } // fim do if
   }
-
-  public void enviarQuadro(int[] quadro, int numDeSequencia) {
-
+  
+  public void receberAck(int quadro[]) {
+    int numDeSequencia = quadro[0] >> 24;
   }
-
 }

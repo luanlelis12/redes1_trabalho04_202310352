@@ -718,9 +718,6 @@ public class CamadaEnlaceDadosTransmissora {
   * Retorno: int[]
   *************************************************************** */
   public void camadaEnlaceDadosTransmissoraJanelaDeslizanteGoBackN (int quadro []) {
-    filaDeEspera.add(quadro);
-
-
     
   }//fim do metodo camadaEnlaceDadosTransmissoraJanelaDeslizanteGoBackN
   

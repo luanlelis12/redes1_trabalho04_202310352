@@ -47,11 +47,8 @@ public class JanelaDeslizante {
     } // fim do if
   }
 
-  public boolean quadroEstaDentroDaJanela(int ) {
+  public void enviarQuadro(int[] quadro, int numDeSequencia) {
 
   }
- 
-  public void receberAck(int quadro[]) {
-    int numDeSequencia = quadro[0] >> 24;
-  }
+
 }

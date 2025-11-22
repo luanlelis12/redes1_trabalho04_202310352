@@ -28,10 +28,10 @@ public class CamadaEnlaceDadosTransmissora {
   private int tipoDeControleDeErro = 0;
   private int tipoDeControleDeFluxo = 0;
 
-  private Queue<int[]> filaDeEspera = new LinkedList<>();
-  private JanelaDeslizante janelaDeslizanteTransmissora;
-
-  private int numDeSequencia = -1;
+  private int numDeSequencia = -1; // Proximo quadro a ser enviado (0 ou 1)
+  private int[] ultimoQuadroEnviado = null; // Armazena o ultimo quadro enviado para retransmissao
+  
+  private int ack_esperado = 1;
 
   private volatile boolean esperandoAck = false;
   private final Object lock = new Object();
@@ -40,6 +40,15 @@ public class CamadaEnlaceDadosTransmissora {
   // Executor para agendar a tarefa de timeout
   private ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
   private ScheduledFuture<?> timerHandle;
+
+  public void reset() {
+    numDeSequencia = -1;
+    esperandoAck = false;
+    ack_esperado = 1;
+    if (timerHandle != null) {
+      timerHandle.cancel(false);
+    }
+  } // fim do metodo reset
 
   /* ***************************************************************
   * Metodo: CamadaEnlaceDadosTransmissora
@@ -90,6 +99,8 @@ public class CamadaEnlaceDadosTransmissora {
   public void camadaEnlaceDadosTransmissora(int quadro[]) {
 
     quadro = inserirNumeroDeSequencia(quadro);
+    System.out.println("Transmissor: Quadro com Numero de Sequencia (" + numDeSequencia + "): ");
+    ConversorStringBinario.exibirBits(quadro);
     quadro = camadaEnlaceDadosTransmissoraEnquadramento(quadro);
     quadro = camadaEnlaceDadosTransmissoraControleDeErro(quadro);
     camadaEnlaceDadosTransmissoraControleDeFluxo(quadro);
@@ -151,7 +162,7 @@ public class CamadaEnlaceDadosTransmissora {
   * Retorno: void
   *************************************************************** */
   public void camadaEnlaceDadosTransmissoraControleDeFluxo (int quadro []) {
-    switch (tipoDeControleDeErro) {
+    switch (tipoDeControleDeFluxo) {
       case 0 : //protocolo de janela deslizante de 1 bit
         camadaEnlaceDadosTransmissoraJanelaDeslizanteUmBit(quadro);
         break;
@@ -162,41 +173,6 @@ public class CamadaEnlaceDadosTransmissora {
         //codigo
         break; 
     }//fim do switch/case
-    // Envia o quadro para camada 
-    camadaFisicaTransmissora.camadaFisicaTransmissora(quadro);
-    // synchronized (lock) {
-    //   // Se ja estiver esperando um ACK, a camada de aplicacao ficara bloqueada aqui
-    //   while (esperandoAck) {
-    //     try {
-    //       System.out.println("Transmissor: Bloqueado. Esperando ACK anterior...");
-    //       lock.wait();
-    //     } catch (InterruptedException e) {
-    //       Thread.currentThread().interrupt();
-    //       return;
-    //     } // fim do try/catch
-    //   } // fim do while
-
-    //   // Marca que esperando um ack
-    //   this.esperandoAck = true;
-    //   System.out.println("Transmissor: Iniciando envio do quadro.");
-      
-    //   // Envia os dados e inicia o timer
-    //   enviarEIniciarTimer(quadro);
-
-    //   // Espera pelo ACK e a thread da aplicacao fica parada aqui
-    //   while (esperandoAck) {
-    //     try {
-    //       // Espera ser notificado pelo ACK ou pelo timeout
-    //       lock.wait();
-    //     } catch (InterruptedException e) {
-    //       Thread.currentThread().interrupt();
-    //       break;
-    //     } // fim do try/catch
-    //   } // fim do while
-
-    //   // Quando sair do loop, ou o ACK chegou ou o envio foi interrompido
-    //   System.out.println("Transmissor: Envio concluido. Desbloqueando aplicacao.");
-    // }
   } //fim do metodo camadaEnlaceDadosTransmissoraControleDeFluxo
 
   /* ***************************************************************
@@ -641,15 +617,27 @@ public class CamadaEnlaceDadosTransmissora {
   * Parametros: 
   * Retorno: void
   *************************************************************** */
-  public void receberAck() {
+  public void receberAck(int[] quadroAck) {
     synchronized (lock) {
-      if (esperandoAck) {
-        System.out.println("Transmissor: ACK Recebido!");
-        esperandoAck = false; // Para de esperar
-        if (timerHandle != null) {
-          timerHandle.cancel(false); // Cancela o timer de timeout
-        } // fim do if
-        lock.notify(); // Acorda a thread da aplicacao (que esta no wait())
+      if (!esperandoAck) {
+        // Nao estamos esperando nada. Descarta
+        return;
+      } // fim do if
+
+      // Extrai o numero de sequencia do ACK (bits 30-24).
+      int nr_bit = (quadroAck[0] >>> 24) & 0x7F; // Extrai os 7 bits de NR
+      
+      if (nr_bit == ack_esperado) {
+          System.out.println("Transmissor: ACK Recebido OK (NR=" + nr_bit + ")!");
+          ack_esperado = (ack_esperado + 1) % 8; 
+          esperandoAck = false; // Para de esperar
+          if (timerHandle != null) {
+            timerHandle.cancel(false); // Cancela o timer de timeout
+          } // fim do if
+          lock.notify(); // Acorda a thread da aplicacao (que esta no wait())
+      } else {
+          // ACK inesperado (ACK duplicado). Simplesmente ignora e continua esperando.
+          System.out.println("Transmissor: ACK Recebido Fora de Ordem (NR=" + nr_bit + " vs Esperado=" + ack_esperado + "). Ignorando.");
       } // fim do if
     } // fim do synchronized
   } // fim do metodo receberAck
@@ -660,10 +648,15 @@ public class CamadaEnlaceDadosTransmissora {
   * Parametros: 
   * Retorno: void
   *************************************************************** */
-  public void enviarAck(int[] quadro) {
+  public void enviarAck(int proximoQuadroEsperado) {
     int[] quadroAck = new int[1];
-    quadroAck[0] = 0x80000000;
-    quadroAck[0] |= quadro[0] & 0xFF000000;
+    // Bit 31: 1 = ACK
+    // Bits 30-24: Proximo Quadro Esperado (NR)
+    quadroAck[0] = 0x80000000; // Seta o bit 31 (ACK flag)
+
+    // Coloca o NR (que sera 0 ou 1 para S/W) nos bits 30-24
+    int nr_protocolo = proximoQuadroEsperado % 8; // Usa modulo 8 para o campo de 7 bits
+    quadroAck[0] |= nr_protocolo << 24; 
 
     // faz o controle de erro no ack
     quadroAck = camadaEnlaceDadosTransmissoraEnquadramento(quadroAck);
@@ -678,7 +671,44 @@ public class CamadaEnlaceDadosTransmissora {
   * Retorno: void
   *************************************************************** */
   public void camadaEnlaceDadosTransmissoraJanelaDeslizanteUmBit (int quadro []) {
-    //implementacao do algoritmo
+    synchronized (lock) {
+        // Se ja estiver esperando um ACK, a camada de aplicacao ficara bloqueada aqui
+        while (esperandoAck) {
+          try {
+            System.out.println("Transmissor: Bloqueado. Esperando ACK anterior...");
+            lock.wait();
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return;
+          } // fim do try/catch
+        } // fim do while
+
+        // A thread da aplicacao so continua se NAO estiver esperando ACK.
+        this.ultimoQuadroEnviado = quadro; // Salva para retransmissao
+
+        // Marca que esperando um ack
+        this.esperandoAck = true;
+        // Para S/W, o NS e sempre 0 ou 1.
+        System.out.println("Transmissor: Iniciando envio do quadro #" + (numDeSequencia));
+        
+        // Envia os dados e inicia o timer
+        enviarEIniciarTimer(quadro);
+
+        // Espera pelo ACK e a thread da aplicacao fica parada aqui
+        while (esperandoAck) {
+          try {
+            // Espera ser notificado pelo ACK ou pelo timeout
+            lock.wait();
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            break;
+          } // fim do try/catch
+        } // fim do while
+
+        // Quando sair do loop, ou o ACK chegou ou o envio foi interrompido
+        System.out.println("Transmissor: Envio concluido. Desbloqueando aplicacao.");
+        // Se o envio foi OK (esperandoAck == false), avanca o numero de sequencia.
+      } // fim do synchronized
   }//fim do metodo camadaEnlaceDadosTransmissoraJanelaDeslizanteUmBit
   
   /* ***************************************************************
@@ -707,6 +737,7 @@ public class CamadaEnlaceDadosTransmissora {
 
   public int[] inserirNumeroDeSequencia(int[] quadro) {
     numDeSequencia=(numDeSequencia+1)%8;
+    System.out.println("Transmissor: Inserindo Numero de Sequencia #" + numDeSequencia);
     
     final int QUANTIDADE_BIT_ESCRITA = 8; // 1 (ACK/DADO) + 7 (Numero de sequencia)
     final int QUANTIDADE_TOTAL_BITS = (quadro[0] == 0 ? 0 : quadro.length*32); // Se for um pacote vazio (ACK antigo?), nao le

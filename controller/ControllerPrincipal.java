@@ -2,7 +2,7 @@
 * Autor............: Luan Alves Lelis Costa
 * Matricula........: 202310352
 * Inicio...........: 25 08 2025
-* Ultima alteracao.: 02 11 2025
+* Ultima alteracao.: 21 11 2025
 * Nome.............: ControllerPrincipal.java
 * Funcao...........: Configurar a tela principal e estabelecer conexoes
 *************************************************************** */
@@ -226,6 +226,19 @@ public class ControllerPrincipal implements Initializable {
     // Pega o monitor DE dentro do MeioDeComunicacao
     this.monitorDeFluxo = meioDeComunicacao.getMonitor();
   }
+
+  /* ***************************************************************
+  * Metodo: resetModels
+  * Funcao: reseta as camadas de enlace de dados para o estado inicial
+  * Parametros: void
+  * Retorno: void
+  *************************************************************** */
+  public void resetModels() {
+    camadaEnlaceDadosTransmissora_HOST_A.reset();
+    camadaEnlaceDadosTransmissora_HOST_B.reset();
+    camadaEnlaceDadosReceptora_HOST_A.reset();
+    camadaEnlaceDadosReceptora_HOST_B.reset();
+  } // fim do metodo resetModels
   
   /* ***************************************************************
   * Metodo: escolherProtocoloCFisica
@@ -427,6 +440,7 @@ public class ControllerPrincipal implements Initializable {
   @FXML
   public void enviarMensagem(ActionEvent event) {
     if (event.getSource() instanceof Button) {
+      System.out.println("-------------------- NOVA MENSAGEM --------------------");
       this.exibirCodificacao();
       // Botao de enviar de cada host
       Button botaoClicado = (Button) event.getSource();
@@ -448,7 +462,9 @@ public class ControllerPrincipal implements Initializable {
       monitorDeFluxo.setTipoProtocoloEnquadramento(enquadramento);
       String protocoloFisica = comboProtocoloCFisica.getSelectionModel().getSelectedItem();
       monitorDeFluxo.setTipoProtocoloFisica(protocoloFisica);
-
+      // Reseta os modelos para o estado inicial
+      resetModels();
+      
       // Seleciona o par Transmissor/Receptor baseado no botao
       if (buttonId.equals("botaoEnviarHostA")) {
         if(!textoTransmissaoHostA.getText().isEmpty()) {

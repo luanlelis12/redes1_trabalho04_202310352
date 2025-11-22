@@ -18,11 +18,11 @@ public class JanelaDeslizante {
   private final int MAX_SEQUENCIA = 8;
 
   // O buffer para guardar os quadros enviados
-  private int[] bufferDeQuadros = new int[MAX_SEQUENCIA];
+  private int[][] bufferDeQuadros;
 
   private int tamanhoJanela; // Quantos quadros podem ser enviados na rede
-  private int bordaInferior; // Limite inferior da janela
-  private int bordaSuperior; // Limite superior do janela
+  private int base; // Limite inferior da janela
+  private int proximoSeqNum; // Limite superior do janela
 
   // Identifica se a janela sera usada na transmissao ou na recepcao
   private String tipoDeJanela;
@@ -35,14 +35,15 @@ public class JanelaDeslizante {
 
     this.tamanhoJanela = tamanhoJanela;
     this.tipoDeJanela = tipoDeJanela;
-    bordaInferior = 0;
+    base = 0;
+    bufferDeQuadros = new int[tamanhoJanela][];
     // Caso a janela seja utilizada para transmissao...
     if (tipoDeJanela == JANELA_TRANSMISSORA) {
       // Ela inicializa com tudo 0
-      bordaSuperior = 0;
+      proximoSeqNum = 0;
     } else if (tipoDeJanela == JANELA_RECEPTOR) {
       // Senao ela inicializa com o intervalo dos quadros a serem recebidos
-      bordaSuperior = tamanhoJanela;
+      proximoSeqNum = tamanhoJanela;
     } // fim do if
   }
 

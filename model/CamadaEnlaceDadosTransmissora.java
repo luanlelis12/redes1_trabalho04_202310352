@@ -10,8 +10,11 @@
 package model;
 
 import util.ConversorStringBinario;
+import util.JanelaDeslizante;
 import util.TabelaCRC;
 
+import java.util.LinkedList;
+import java.util.Queue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -164,7 +167,7 @@ public class CamadaEnlaceDadosTransmissora {
         camadaEnlaceDadosTransmissoraJanelaDeslizanteUmBit(quadro);
         break;
       case 1 : //protocolo de janela deslizante go-back-n
-        //codigo
+        camadaEnlaceDadosTransmissoraJanelaDeslizanteGoBackN(quadro);
         break;
       case 2 : //protocolo de janela deslizante com retransmissão seletiva
         //codigo
@@ -665,7 +668,7 @@ public class CamadaEnlaceDadosTransmissora {
   * Metodo: camadaEnlaceDadosTransmissoraJanelaDeslizanteUmBit
   * Funcao: realiza o controle de fluxo pelo metodo da janela deslizante de um bit
   * Parametros: quadro = conjunto de bits da mensagem
-  * Retorno: int[]
+  * Retorno: void
   *************************************************************** */
   public void camadaEnlaceDadosTransmissoraJanelaDeslizanteUmBit (int quadro []) {
     synchronized (lock) {
@@ -714,9 +717,11 @@ public class CamadaEnlaceDadosTransmissora {
   * Parametros: quadro = conjunto de bits da mensagem
   * Retorno: int[]
   *************************************************************** */
-  public int[] camadaEnlaceDadosTransmissoraJanelaDeslizanteGoBackN (int quadro []) {
-    //implementacao do algoritmo
-    return quadro;
+  public void camadaEnlaceDadosTransmissoraJanelaDeslizanteGoBackN (int quadro []) {
+    filaDeEspera.add(quadro);
+
+
+    
   }//fim do metodo camadaEnlaceDadosTransmissoraJanelaDeslizanteGoBackN
   
   /* ***************************************************************

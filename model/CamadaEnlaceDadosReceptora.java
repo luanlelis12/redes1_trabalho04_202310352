@@ -785,13 +785,16 @@ public class CamadaEnlaceDadosReceptora {
     } // fim do if
   }//fim do camadaEnlaceDadosReceptoraJanelaDeslizanteComRetransmissaoSeletiva
   
+  /* ***************************************************************
+  * Metodo: retirarNumeroDeSequencia
+  * Funcao: retira o numero de sequencia do quadro
+  * Parametros: quadro = conjunto de bits da mensagem
+  * Retorno: int[]
+  *************************************************************** */
   private int[] retirarNumeroDeSequencia(int[] quadro) {
-    
     int[] quadroSemSequencia = new int[1];
-    
     quadroSemSequencia[0] = quadro[0] << 8;
-
     return quadroSemSequencia;
-  }
+  } // fim do metodo retirarNumeroDeSequencia
 
 }

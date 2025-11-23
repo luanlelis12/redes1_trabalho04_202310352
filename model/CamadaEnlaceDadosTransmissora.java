@@ -28,8 +28,14 @@ public class CamadaEnlaceDadosTransmissora {
   private int tipoDeControleDeErro = 0;
   private int tipoDeControleDeFluxo = 0;
 
-  private int numDeSequencia = -1; // Proximo quadro a ser enviado (0 ou 1)
-  private int[] ultimoQuadroEnviado = null; // Armazena o ultimo quadro enviado para retransmissao
+  private final int TAMANHO_JANELA = 3;
+  private final int ESPACO_SEQUENCIA = 8;
+
+  private int base = 0;
+  private int[] bufferDeQuadros[] = new int[TAMANHO_JANELA][];
+
+  private int numDeSequencia = -1;
+  private int[] ultimoQuadroEnviado = null;
   
   private int ack_esperado = 1;
 
@@ -42,8 +48,14 @@ public class CamadaEnlaceDadosTransmissora {
   private ScheduledFuture<?> timerHandle;
 
   public void reset() {
+    // Reset do Stop-and-Wait
     numDeSequencia = -1;
     esperandoAck = false;
+
+    // Reset GBN
+    base = 0;
+
+    // Reset do timer
     ack_esperado = 1;
     if (timerHandle != null) {
       timerHandle.cancel(false);
@@ -599,16 +611,41 @@ public class CamadaEnlaceDadosTransmissora {
   * Retorno: void
   *************************************************************** */
   private void handleTimeout(int[] quadroParaReenviar) {
-    synchronized (lock) {
-      if (!esperandoAck) {
-        // O ACK chegou exatamente no ultimo segundo. O timer e invalido.
-        return; 
-      } // fim do if
+    switch (tipoDeControleDeFluxo) {
+      case 0:
+        synchronized (lock) {
+          if (!esperandoAck) {
+            // O ACK chegou exatamente no ultimo segundo. O timer e invalido.
+            return; 
+          } // fim do if
 
-      System.out.println("Transmissor: TIMEOUT! Retransmitindo quadro...");
-      // Re-envia e reinicia o timer.
-      enviarEIniciarTimer(quadroParaReenviar);
-    } // fim do ssynchronized
+          System.out.println("Transmissor: TIMEOUT! Retransmitindo quadro...");
+          // Re-envia e reinicia o timer.
+          enviarEIniciarTimer(quadroParaReenviar);
+        } // fim do ssynchronized
+        break;
+      case 1:
+        synchronized (lock) {
+          if (!esperandoAck) {
+            // O ACK chegou exatamente no ultimo segundo. O timer e invalido.
+            return; 
+          } // fim do if
+          System.out.println("Transmissor GBN: TIMEOUT! Retransmitindo todos quadros a partir de #" + base);
+          int seq = base;
+          while (seq != numDeSequencia) {
+              int indiceBuffer = seq % TAMANHO_JANELA;
+              System.out.println("Transmissor GBN: Retransmitindo quadro #" + seq);
+              
+              // APENAS chama o envio, sem reiniciar o timer.
+              camadaFisicaTransmissora.camadaFisicaTransmissora(bufferDeQuadros[indiceBuffer]); 
+
+              seq = (seq + 1) % ESPACO_SEQUENCIA;
+          } // fim do while
+          // Reinicia o timer para a BASE (primeiro quadro retransmitido)
+          enviarEIniciarTimer(bufferDeQuadros[base % TAMANHO_JANELA]);
+        } // fim do ssynchronized
+        break;    
+    } // fim do switch/case
   } // fim do metodo handleTimeout
 
   /* ***************************************************************
@@ -631,9 +668,21 @@ public class CamadaEnlaceDadosTransmissora {
           System.out.println("Transmissor: ACK Recebido OK (NR=" + nr_bit + ")!");
           ack_esperado = (ack_esperado + 1) % 8; 
           esperandoAck = false; // Para de esperar
+          
+          // Atualiza a BASE (cumulativo)
+          base = nr_bit;
+
+          // Cancela o timer
           if (timerHandle != null) {
-            timerHandle.cancel(false); // Cancela o timer de timeout
+            timerHandle.cancel(false);
           } // fim do if
+
+          // Se a janela não estiver vazia, inicia o timer para a nova BASE
+          if (base != numDeSequencia & tipoDeControleDeFluxo == 1) {
+            // A nova BASE é o quadro base. Inicia o timer para ele.
+            enviarEIniciarTimer(bufferDeQuadros[base % TAMANHO_JANELA]);
+          } // fim do if
+
           lock.notify(); // Acorda a thread da aplicacao (que esta no wait())
       } else {
           // ACK inesperado (ACK duplicado). Simplesmente ignora e continua esperando.
@@ -718,7 +767,36 @@ public class CamadaEnlaceDadosTransmissora {
   * Retorno: int[]
   *************************************************************** */
   public void camadaEnlaceDadosTransmissoraJanelaDeslizanteGoBackN (int quadro []) {
-    
+    synchronized (lock) {
+        
+        // 1. BLOQUEIO: Espera se a janela estiver cheia
+        // A janela está cheia se numDeSequencia for (base + TAMANHO_JANELA) % ESPACO_SEQUENCIA
+        while (!estaDentroDaJanela(numDeSequencia, base, TAMANHO_JANELA)) {
+            try {
+                System.out.println("Transmissor GBN: Janela cheia. Bloqueado. Base=" + base + ", Prox=" + numDeSequencia);
+                lock.wait();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        } // fim do while
+
+        // 2. ARMAZENAR NO BUFFER (Calcula o índice circular do buffer: (numDeSequencia - base + ESPACO_SEQUENCIA) % ESPACO_SEQUENCIA)
+        int indiceBuffer = base % TAMANHO_JANELA; 
+        bufferDeQuadros[indiceBuffer] = quadro;
+
+        // 3. ENVIAR E INICIAR TIMER (apenas se for o primeiro quadro na janela)
+        boolean iniciarTimer = (base == numDeSequencia);
+
+        System.out.println("Transmissor GBN: Enviando quadro #" + numDeSequencia + " (Base=" + base + ")");
+        camadaFisicaTransmissora.camadaFisicaTransmissora(quadro);
+
+        if (iniciarTimer) {
+            // Inicia o timer da BASE
+            enviarEIniciarTimer(bufferDeQuadros[base % TAMANHO_JANELA]); 
+        }
+
+    } // fim do synchronized
   }//fim do metodo camadaEnlaceDadosTransmissoraJanelaDeslizanteGoBackN
   
   /* ***************************************************************
@@ -765,4 +843,22 @@ public class CamadaEnlaceDadosTransmissora {
     }
     return quadroComSequencia;
   }
+
+  /* ***************************************************************
+  * Metodo: estaDentroDaJanela
+  * Funcao: Verifica se um NS/NR está dentro da janela [base, numDeSequencia)
+  * Parametros: num = NS/NR a ser checado
+  *             base = Limite inferior da janela
+  *             limite = Limite superior da janela (numDeSequencia)
+  * Retorno: true se estiver dentro, false caso contrário
+  *************************************************************** */
+  private boolean estaDentroDaJanela(int num, int base, int limite) {
+    if (base <= limite) {
+      // Janela não circulou: [base, limite)
+      return num >= base && num < limite;
+    } else {
+      // Janela circulou: [base, ESPACO_SEQUENCIA) U [0, limite)
+      return num >= base || num < limite;
+    }
+  } // fim do metodo estaDentroDaJanela
 }

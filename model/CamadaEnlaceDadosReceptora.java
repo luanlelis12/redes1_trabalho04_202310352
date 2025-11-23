@@ -21,6 +21,7 @@ public class CamadaEnlaceDadosReceptora {
   private int tipoDeControleDeErro = 0;
   private int tipoDeControleDeFluxo = 0;
 
+  private final int ESPACO_SEQUENCIA = 8;
   private boolean erroNoQuadro = false;
   private int nsEsperado = 0;
 
@@ -175,7 +176,7 @@ public class CamadaEnlaceDadosReceptora {
         quadro = camadaEnlaceDadosReceptoraJanelaDeslizanteUmBit(quadro);
         break;
       case 1 : //protocolo de janela deslizante go-back-n
-        //codigo
+        quadro = camadaEnlaceDadosReceptoraJanelaDeslizanteGoBackN(quadro);
         break;
       case 2 : //protocolo de janela deslizante com retransmissão seletiva
         //codigo
@@ -642,8 +643,43 @@ public class CamadaEnlaceDadosReceptora {
   * Parametros: quadro = conjunto de bits da mensagem
   * Retorno: int[]
   *************************************************************** */
-  public void camadaEnlaceDadosReceptoraJanelaDeslizanteGoBackN (int quadro []) {
-    //implementacao do algoritmo
+  public int[] camadaEnlaceDadosReceptoraJanelaDeslizanteGoBackN (int quadro []) {
+    int bitVerificacaoAck = quadro[0] >>> 31;
+
+    // Se for um ACK, notifica o transmissor deste HOST (mesma lógica do S/W)
+    if (bitVerificacaoAck == 1) {
+      System.out.println("Receptor GBN: ACK detectado.");
+      if (meuTransmissor != null) {
+        meuTransmissor.receberAck(quadro); 
+      } // fim do if
+      return null; // Era um ACK
+    } // fim do if
+    
+    // --- Lógica GBN para DADOS ---
+    int nsRecebido = (quadro[0] >>> 24) & 0x7F; // Extrai o NS
+
+    System.out.println("Receptor GBN: Quadro DADOS detectado (NS=" + nsRecebido + " vs Esperado=" + nsEsperado + ")");
+
+    if (nsRecebido == nsEsperado) {
+      // 1. Quadro é o esperado (em ordem). Aceita e avança.
+      System.out.println("Receptor GBN: Quadro OK. Enviando ACK para #" + (nsEsperado + 1) % ESPACO_SEQUENCIA);
+      
+      nsEsperado = (nsEsperado + 1) % ESPACO_SEQUENCIA; // Avança para o próximo
+      
+      // 2. Envia ACK cumulativo (NR = nsEsperado)
+      meuTransmissor.enviarAck(nsEsperado); 
+        
+      return quadro;
+
+    } else {
+      // 3. Quadro fora de ordem ou duplicado. Descarta e re-envia ACK do ÚLTIMO OK.
+      System.out.println("Receptor GBN: Quadro fora de ordem (NS=" + nsRecebido + "). Descartando e re-enviando ACK para #" + nsEsperado);
+        
+      // Envia ACK para o nsEsperado atual (informa o transmissor que o quadro NS=nsEsperado é o que falta)
+      meuTransmissor.enviarAck(nsEsperado); 
+        
+      return null; // Descarta o quadro
+    } // fim do if
   }//fim do metodo camadaEnlaceDadosReceptoraJanelaDeslizanteGoBackN
   
   /* ***************************************************************

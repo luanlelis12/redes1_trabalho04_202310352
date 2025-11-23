@@ -24,6 +24,8 @@ public class CamadaEnlaceDadosReceptora {
   private final int ESPACO_SEQUENCIA = 8;
   private boolean erroNoQuadro = false;
   private int nsEsperado = 0;
+  private final int TAMANHO_JANELA = 3;
+  private int[][] bufferReceptor = new int[TAMANHO_JANELA][];
 
   private CamadaAplicacaoReceptora camadaAplicacaoReceptora;
   // referencia ao transmissor do mesmo host (para enviar ACKs)
@@ -32,6 +34,9 @@ public class CamadaEnlaceDadosReceptora {
   public void reset() {
     erroNoQuadro = false;
     nsEsperado = 0;
+    for(int i=0; i < TAMANHO_JANELA; i++) {
+        bufferReceptor[i] = null;
+    }
   } // fim do metodo reset
 
   public CamadaEnlaceDadosReceptora (CamadaAplicacaoReceptora camadaAplicacaoReceptora) {
@@ -179,7 +184,7 @@ public class CamadaEnlaceDadosReceptora {
         quadro = camadaEnlaceDadosReceptoraJanelaDeslizanteGoBackN(quadro);
         break;
       case 2 : //protocolo de janela deslizante com retransmissão seletiva
-        //codigo
+        quadro = camadaEnlaceDadosReceptoraJanelaDeslizanteComRetransmissaoSeletiva(quadro);
         break; 
     }//fim do switch/case
     // Se nao era um ACK, retorna o quadro para processamento normal
@@ -688,8 +693,96 @@ public class CamadaEnlaceDadosReceptora {
   * Parametros: quadro = conjunto de bits da mensagem
   * Retorno: int[]
   *************************************************************** */
-  public void camadaEnlaceDadosReceptoraJanelaDeslizanteComRetransmissaoSeletiva (int quadro []) {
-    //implementacao do algoritmo
+  public int[] camadaEnlaceDadosReceptoraJanelaDeslizanteComRetransmissaoSeletiva (int quadro []) {
+    int bitVerificacaoAck = quadro[0] >>> 31;
+
+    // Se for um ACK, notifica o transmissor deste HOST
+    if (bitVerificacaoAck == 1) {
+      System.out.println("Receptor SR: ACK detectado.");
+      if (meuTransmissor != null) {
+        meuTransmissor.receberAck(quadro); 
+      } // fim do if
+      return null; // Era um ACK
+    } // fim do if
+    
+    // NS = Número de Sequência do quadro de dados recebido
+    int nsRecebido = (quadro[0] >>> 24) & 0x7F;
+
+    System.out.println("Receptor SR: Quadro DADOS detectado (NS=" + nsRecebido + " vs Esperado=" + nsEsperado + ")");
+
+    // Limites da Janela Receptora: [nsEsperado (base), nsEsperado + W)
+    int limiteSuperior = (nsEsperado + TAMANHO_JANELA) % ESPACO_SEQUENCIA; 
+
+    // Checa se o NS recebido está na Janela Receptora (lógica circular)
+    boolean estaNaJanela = false;
+    if (nsEsperado <= limiteSuperior) {
+        // Janela não circulou: [nsEsperado, limiteSuperior)
+        estaNaJanela = nsRecebido >= nsEsperado && nsRecebido < limiteSuperior;
+    } else {
+        // Janela circulou: [nsEsperado, ESPACO_SEQUENCIA) U [0, limiteSuperior)
+        estaNaJanela = nsRecebido >= nsEsperado || nsRecebido < limiteSuperior;
+    }
+    
+    // Calcula o limite inferior da janela de aceitação para quadros que já foram recebidos
+    int limiteInferior = (nsEsperado - TAMANHO_JANELA + ESPACO_SEQUENCIA) % ESPACO_SEQUENCIA;
+
+    // Verifica se o quadro está na Janela Receptora (para aceitação)
+    if (estaNaJanela) {
+        
+        int indiceBuffer = nsRecebido % TAMANHO_JANELA;
+        
+        // 1. Envia ACK para o quadro recebido (NS+1 = NR)
+        int nrAEnviar = (nsRecebido + 1) % ESPACO_SEQUENCIA;
+        System.out.println("Receptor SR: Quadro OK. Enviando ACK para #" + nrAEnviar);
+        meuTransmissor.enviarAck(nrAEnviar);
+        
+        // 2. Armazena o quadro (se não for duplicado)
+        if (bufferReceptor[indiceBuffer] == null) {
+            bufferReceptor[indiceBuffer] = quadro;
+            System.out.println("Receptor SR: Quadro #" + nsRecebido + " armazenado no buffer.");
+        } else {
+             System.out.println("Receptor SR: Quadro duplicado #" + nsRecebido + ". Descartado (já no buffer).");
+        }
+        
+        // 3. Verifica se o quadro recebido é a BASE (nsEsperado)
+        if (nsRecebido == nsEsperado) {
+            int quadroADevolver[] = null;
+            
+            // Entrega os quadros em ordem e avança a janela
+            while (bufferReceptor[nsEsperado % TAMANHO_JANELA] != null) {
+                
+                // O quadro a ser devolvido para a próxima camada é o primeiro na sequência
+                quadroADevolver = bufferReceptor[nsEsperado % TAMANHO_JANELA];
+                System.out.println("Receptor SR: Entregando quadro #" + nsEsperado + " e deslizando janela.");
+
+                // Limpa o slot do buffer
+                bufferReceptor[nsEsperado % TAMANHO_JANELA] = null; 
+                
+                // Avança a base
+                nsEsperado = (nsEsperado + 1) % ESPACO_SEQUENCIA;
+            } // fim do while
+
+            return quadroADevolver; // Retorna o último quadro entregue
+            
+        } else {
+            // Quadro fora de ordem. Já enviamos o ACK e armazenamos. Nada a entregar agora.
+            System.out.println("Receptor SR: Quadro fora de ordem #" + nsRecebido + ". Armazenado.");
+            return null;
+        }
+
+    } else {
+        // Quadro fora da janela (muito antigo ou muito à frente).
+        // Se for muito antigo (limiteInferior <= NS < nsEsperado), re-envia o ACK para NS+1
+        if (meuTransmissor.estaDentroDaJanela(nsRecebido, limiteInferior, nsEsperado)) {
+            int nrAEnviar = (nsRecebido + 1) % ESPACO_SEQUENCIA;
+            System.out.println("Receptor SR: Quadro antigo/duplicado, re-enviando ACK para #" + nrAEnviar);
+            meuTransmissor.enviarAck(nrAEnviar);
+        } else {
+            // Muito a frente
+            System.out.println("Receptor SR: Quadro muito fora da janela. Descartando.");
+        }
+        return null;
+    }
   }//fim do camadaEnlaceDadosReceptoraJanelaDeslizanteComRetransmissaoSeletiva
   
   private int[] retirarNumeroDeSequencia(int[] quadro) {

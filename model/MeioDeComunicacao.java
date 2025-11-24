@@ -11,7 +11,6 @@ package model;
 
 import java.util.Random;
 
-import util.ConversorStringBinario;
 import util.MonitorDeFluxo;
 
 public class MeioDeComunicacao {

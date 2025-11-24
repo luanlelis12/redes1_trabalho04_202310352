@@ -10,11 +10,8 @@
 package model;
 
 import util.ConversorStringBinario;
-import util.JanelaDeslizante;
 import util.TabelaCRC;
 
-import java.util.LinkedList;
-import java.util.Queue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -45,7 +42,6 @@ public class CamadaEnlaceDadosTransmissora {
   private final Object lock = new Object();
   private static final long TIMEOUT_MS = 1000; // 1 segundos de timeout
 
-  // Executor para agendar a tarefa de timeout
   private ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
   private ScheduledFuture<?> timerHandle;
 
@@ -53,24 +49,24 @@ public class CamadaEnlaceDadosTransmissora {
     // Reset do Stop-and-Wait
     numDeSequencia = -1;
     esperandoAck = false;
-
     // Reset GBN
     base = 0;
-
-    // Limpa os estados de confirmaçao e timers
+    // Limpa os estados de confirmacao, timers e o buffer
     for(int i=0; i < TAMANHO_JANELA; i++) {
-        quadroConfirmado[i] = false;
-        if(timers[i] != null) {
-            timers[i].cancel(false);
-            timers[i] = null;
-        }
-    }
-
+      quadroConfirmado[i] = false;
+      // Limpa o buffer de quadros
+      bufferDeQuadros[i] = null; 
+      if(timers[i] != null) {
+        timers[i].cancel(false);
+        timers[i] = null;
+      } // fim do if
+    } // fim do for
     // Reset do timer
     ack_esperado = 1;
     if (timerHandle != null) {
       timerHandle.cancel(false);
-    }
+      timerHandle = null;
+    } // fim do if
   } // fim do metodo reset
 
   /* ***************************************************************
@@ -611,7 +607,7 @@ public class CamadaEnlaceDadosTransmissora {
     
     // Agenda a tarefa de timeout
     timerHandle = scheduler.schedule(() -> {
-      handleTimeout(quadro); // O que fazer se o tempo estourar
+      handleTimeout(quadro);
     }, TIMEOUT_MS, TimeUnit.MILLISECONDS);
   } // fim do metodo enviarEIniciarTimer
 
@@ -688,8 +684,15 @@ public class CamadaEnlaceDadosTransmissora {
     synchronized (lock) {
       int indiceBuffer = ns % TAMANHO_JANELA;
       
-      // Apenas retransmite se o quadro ainda nao foi confirmado
-      if (bufferDeQuadros[indiceBuffer] != null && !quadroConfirmado[indiceBuffer]) { 
+      // Se o quadro ja foi confirmado, apenas limpa a referencia e ignora.
+      if (quadroConfirmado[indiceBuffer]) {
+        timers[indiceBuffer] = null; // Limpa a referencia do timer para o slot
+        System.out.println("Transmissor SR: TIMEOUT (NS=" + ns + "). Quadro ja confirmado. Ignorando.");
+        return;
+      } // fim do if
+      
+      // Apenas retransmite se o quadro ainda nao foi confirmado e esta no buffer
+      if (bufferDeQuadros[indiceBuffer] != null) { 
         System.out.println("Transmissor SR: TIMEOUT! Retransmitindo quadro #" + ns);
         enviarEIniciarTimerSR(bufferDeQuadros[indiceBuffer], ns); // Retransmite e reinicia o timer
       } // fim do if
@@ -753,13 +756,10 @@ public class CamadaEnlaceDadosTransmissora {
           } // fim do if
 
           if (ackAvancaJanela) {
-
             // Logica GBN
             System.out.println("Transmissor GBN: ACK Recebido OK (NR=" + nr_bit + ")! Movendo BASE de #" + base + " para #" + nr_bit);
-            
             // Atualiza a BASE (NR e o proximo quadro esperado).
             base = nr_bit; 
-
             // Cancela o timer
             if (timerHandle != null) {
               timerHandle.cancel(false);
@@ -770,7 +770,7 @@ public class CamadaEnlaceDadosTransmissora {
               if (bufferDeQuadros[indiceNovaBase] != null) {
                 enviarEIniciarTimer(bufferDeQuadros[indiceNovaBase]);
               } else {
-                System.out.println("Transmissor GBN: BASE avançou, mas o quadro #" + base + " ainda nao foi enviado/armazenado. Sem timer.");
+                System.out.println("Transmissor GBN: BASE avancou, mas o quadro #" + base + " ainda nao foi enviado/armazenado. Sem timer.");
               } // fim do if
             } // fim do if
 
@@ -788,48 +788,48 @@ public class CamadaEnlaceDadosTransmissora {
           int nr_bit = (quadroAck[0] >>> 24) & 0x7F; // Extrai os 7 bits de NR
 
           int nsConfirmado = (nr_bit - 1 + ESPACO_SEQUENCIA) % ESPACO_SEQUENCIA; // NS = NR - 1
-              
-          // 1. Verifica se o NS confirmado esta dentro da janela [base, numDeSequencia)
-          // A janela SR e [base, numDeSequencia)
-          int limiteSuperior = numDeSequencia; // O limite superior da janela SR e 'numDeSequencia' (exclusivo)
+          int distancia = (nsConfirmado - base + ESPACO_SEQUENCIA) % ESPACO_SEQUENCIA;
 
-          if (estaDentroDaJanela(nsConfirmado, base, limiteSuperior)) {
-            int indiceBuffer = nsConfirmado % TAMANHO_JANELA;
-            System.out.println("Transmissor SR: ACK Recebido OK (NS Confirmado=" + nsConfirmado + ", NR=" + nr_bit + ")!");
-
-            // 2. Cancela o timer para o quadro especifico
-            if (timers[indiceBuffer] != null) {
-              timers[indiceBuffer].cancel(false); 
-              timers[indiceBuffer] = null;
-            } // fim do if 
-                    
-            // 3. Marca o quadro como confirmado
-            quadroConfirmado[indiceBuffer] = true; 
-            // 4. Desliza a Janela (se o quadro confirmado for a BASE)
-            if (nsConfirmado == base) {    
-              int novaBase = base;
-              int indiceNovaBase = base % TAMANHO_JANELA;
-                          
-              // Enquanto o quadro no slot da BASE estiver confirmado, desliza
-              while (quadroConfirmado[indiceNovaBase]) {
-                System.out.println("Transmissor SR: Deslizando janela. Quadro #" + novaBase + " confirmado.");
-                
-                // Limpa o slot do buffer e a flag de confirmaçao
-                bufferDeQuadros[indiceNovaBase] = null; 
-                quadroConfirmado[indiceNovaBase] = false; 
-                
-                // Avança a BASE
-                novaBase = (novaBase + 1) % ESPACO_SEQUENCIA;
-                indiceNovaBase = novaBase % TAMANHO_JANELA;
-              } // fim do while
-              base = novaBase;
-              System.out.println("Transmissor SR: Nova Base: " + base);
-            } // fim do if
-            lock.notifyAll(); // Acorda threads da aplicaçao bloqueadas (janela cheia)
-          } else {
-            // ACK inesperado (ACK duplicado). Simplesmente ignora e continua esperando.
-            System.out.println("Transmissor: ACK Recebido Fora de Ordem (NR=" + nr_bit + "). Ignorando.");
+          // Se a distancia for maior ou igual ao tamanho da janela, ele esta fora.
+          if (distancia >= TAMANHO_JANELA) {
+            System.out.println("Transmissor SR: ACK Recebido FORA da janela de envio (NS Confirmado=" + nsConfirmado + ", Base=" + base + "). Ignorando.");
+            return; 
           } // fim do if
+
+          // Se chegou aqui, o ACK é válido.
+          int indiceBuffer = nsConfirmado % TAMANHO_JANELA;
+          System.out.println("Transmissor SR: ACK Recebido OK (NS Confirmado=" + nsConfirmado + ", NR=" + nr_bit + ")!");
+
+          // Cancela o timer para o quadro especifico
+          if (timers[indiceBuffer] != null) {
+            timers[indiceBuffer].cancel(false); 
+            timers[indiceBuffer] = null;
+          } // fim do if
+
+          // Marca o quadro como confirmado
+          quadroConfirmado[indiceBuffer] = true; 
+          
+          // Desliza a Janela (se o quadro confirmado for a BASE)
+          if (nsConfirmado == base) {    
+            int novaBase = base;
+            int indiceNovaBase = base % TAMANHO_JANELA;
+                        
+            // Enquanto o quadro no slot da BASE estiver confirmado, desliza
+            while (quadroConfirmado[indiceNovaBase]) {
+              System.out.println("Transmissor SR: Deslizando janela. Quadro #" + novaBase + " confirmado.");
+              
+              // Limpa o slot do buffer e a flag de confirmacao
+              bufferDeQuadros[indiceNovaBase] = null; 
+              quadroConfirmado[indiceNovaBase] = false; 
+              
+              // Avanca a BASE
+              novaBase = (novaBase + 1) % ESPACO_SEQUENCIA;
+              indiceNovaBase = novaBase % TAMANHO_JANELA;
+            } // fim do while
+            base = novaBase;
+            System.out.println("Transmissor SR: Nova Base: " + base);
+          } // fim do if
+          lock.notifyAll(); // Acorda threads da aplicacao bloqueadas (janela cheia)
         } // fim do synchronized
         break;
     } // fim do switch/case
@@ -912,8 +912,6 @@ public class CamadaEnlaceDadosTransmissora {
   *************************************************************** */
   public void camadaEnlaceDadosTransmissoraJanelaDeslizanteGoBackN (int quadro []) {
     synchronized (lock) {
-      // 1. BLOQUEIO: Espera se a janela estiver cheia
-      // A janela esta cheia se numDeSequencia for (base + TAMANHO_JANELA) % ESPACO_SEQUENCIA
       while (!estaDentroDaJanela(numDeSequencia, base, (base + TAMANHO_JANELA) % ESPACO_SEQUENCIA)) {
         try {
           System.out.println("Transmissor GBN: Janela cheia. Bloqueado. Base=" + base + ", Prox=" + numDeSequencia);
@@ -924,11 +922,9 @@ public class CamadaEnlaceDadosTransmissora {
         } // fim do try/catch
       } // fim do while
 
-      // 2. ARMAZENAR NO BUFFER (Calcula o indice circular do buffer: (numDeSequencia - base + ESPACO_SEQUENCIA) % ESPACO_SEQUENCIA)
       int indiceBuffer = numDeSequencia % TAMANHO_JANELA;
       bufferDeQuadros[indiceBuffer] = quadro;
 
-      // 3. ENVIAR E INICIAR TIMER (apenas se for o primeiro quadro na janela)
       boolean iniciarTimer = (base == numDeSequencia);
 
       System.out.println("Transmissor GBN: Enviando quadro #" + numDeSequencia + " (Base=" + base + ")");
@@ -938,7 +934,7 @@ public class CamadaEnlaceDadosTransmissora {
         if (base == numDeSequencia) {
           enviarEIniciarTimer(bufferDeQuadros[base % TAMANHO_JANELA]); 
         } else {
-          // A base avançou (ACK chegou). Nao inicie o timer para evitar o NPE (e porque ja foi cancelado).
+          // A base avancou (ACK chegou). Nao inicie o timer para evitar o NPE (e porque ja foi cancelado).
           System.out.println("Transmissor GBN: ACK para quadro #" + (numDeSequencia) + " recebido sincronicamente. Nao iniciando timer.");
         } // fim do if
       } // fim do if
@@ -957,7 +953,7 @@ public class CamadaEnlaceDadosTransmissora {
       // NS do quadro a ser enviado (ja foi incrementado em inserirNumeroDeSequencia)
       int nsAEnviar = numDeSequencia;
 
-      // 1. BLOQUEIO: Espera se a janela estiver cheia
+      // Espera se a janela estiver cheia
       int quadrosEmTransito = (nsAEnviar - base + ESPACO_SEQUENCIA) % ESPACO_SEQUENCIA;
 
       while (quadrosEmTransito >= TAMANHO_JANELA) {
@@ -972,16 +968,14 @@ public class CamadaEnlaceDadosTransmissora {
         } // fim do try/catch
       } // fim do while
 
-      // 2. ARMAZENAR NO BUFFER: indice absoluto: (NS mod W)
+      // Armazena no buffer indice absoluto: (NS mod W)
       int indiceBuffer = nsAEnviar % TAMANHO_JANELA;
       bufferDeQuadros[indiceBuffer] = quadro;
       quadroConfirmado[indiceBuffer] = false; // Garante que esta marcado como nao confirmado
 
-      // 3. ENVIAR e iniciar timer para ESTE quadro
+      // ENVIAR e iniciar timer para ESTE quadro
       System.out.println("Transmissor SR: Enviando quadro #" + nsAEnviar + " (Base=" + base + ")");
       enviarEIniciarTimerSR(quadro, nsAEnviar); // Inicia o timer individual
-        
-      // 4. AVANÇAR NS (REMOVIDO: O incremento ja ocorre em inserirNumeroDeSequencia)
     } // fim do synchronized
   }//fim do metodo camadaEnlaceDadosTransmissoraJanelaDeslizanteComRetransmissaoSeletiva
 
@@ -990,22 +984,19 @@ public class CamadaEnlaceDadosTransmissora {
     System.out.println("Transmissor: Inserindo Numero de Sequencia #" + numDeSequencia);
     
     final int QUANTIDADE_BIT_ESCRITA = 8; // 1 (ACK/DADO) + 7 (Numero de sequencia)
-    final int QUANTIDADE_TOTAL_BITS = (quadro[0] == 0 ? 0 : quadro.length*32); // Se for um pacote vazio (ACK antigo?), nao le
+    final int QUANTIDADE_TOTAL_BITS = (quadro[0] == 0 ? 0 : quadro.length*32);
     final int NOVA_QUANTIDADE_TOTAL_BITS = QUANTIDADE_TOTAL_BITS+QUANTIDADE_BIT_ESCRITA;
 
     int[] quadroComSequencia = new int[(NOVA_QUANTIDADE_TOTAL_BITS+31)/32];
 
-    // --- O NOVO PROTOCOLO ---
     // Bit 31: 0 = DADOS
     // Bit 30-24: Numero de Sequencia (0-7)
     // (O bit 31 ja e 0, entao so setamos o NS)
     quadroComSequencia[0] |= numDeSequencia << 24;
-    // --- FIM DO PROTOCOLO ---
 
     int bitDeSaida = QUANTIDADE_BIT_ESCRITA; // Comeca a escrever DEPOIS dos 5 bits
 
     for (int i = 0; i < QUANTIDADE_TOTAL_BITS; i++) {
-      // ... (o resto do seu loop de copia esta CORRETO) ...
       int indiceArrayEntrada = i / 32;
       int bitPosEntrada = 31 - (i % 32);
       int bit = (quadro[indiceArrayEntrada] >> bitPosEntrada) & 1;
@@ -1013,9 +1004,9 @@ public class CamadaEnlaceDadosTransmissora {
         int indiceArray = bitDeSaida / 32;
         int bitPos = 31 - (bitDeSaida % 32);
         quadroComSequencia[indiceArray] |= (1 << bitPos);
-      }
+      } // fim do if
       bitDeSaida++;
-    }
+    } // fim do for
     return quadroComSequencia;
   }
 

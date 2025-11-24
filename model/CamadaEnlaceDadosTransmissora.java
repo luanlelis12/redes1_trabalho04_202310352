@@ -787,16 +787,45 @@ public class CamadaEnlaceDadosTransmissora {
         synchronized (lock) {
           int nr_bit = (quadroAck[0] >>> 24) & 0x7F; // Extrai os 7 bits de NR
 
+          if (nr_bit == base) {
+            System.out.println("Transmissor SR: ACK de Reasseguro (NR=" + base + ") recebido. Cancelando timer da BASE.");
+            int indiceTimer = base % TAMANHO_JANELA;
+            // Cancela o timer do quadro da BASE.
+            if (timers[indiceTimer] != null) {
+              timers[indiceTimer].cancel(false); 
+              timers[indiceTimer] = null;
+            } // fim do if
+            return; // Termina o processamento do ACK.
+          } // fim do if
+
           int nsConfirmado = (nr_bit - 1 + ESPACO_SEQUENCIA) % ESPACO_SEQUENCIA; // NS = NR - 1
           int distancia = (nsConfirmado - base + ESPACO_SEQUENCIA) % ESPACO_SEQUENCIA;
+          
+          boolean ackValido = false;
 
-          // Se a distancia for maior ou igual ao tamanho da janela, ele esta fora.
-          if (distancia >= TAMANHO_JANELA) {
+          // Check Normal: NS Confirmado esta dentro da janela [base, base+W)
+          if (distancia < TAMANHO_JANELA) {
+            ackValido = true;
+          } // fim do if
+          
+          if (!ackValido && nr_bit == base) {
+            System.out.println("Transmissor SR: ACK de Reasseguro (NR=" + base + ") recebido. Cancelando timer da BASE.");
+            int indiceTimer = base % TAMANHO_JANELA;
+            // Cancela o timer do quadro da BASE.
+            if (timers[indiceTimer] != null) {
+              timers[indiceTimer].cancel(false); 
+              timers[indiceTimer] = null;
+            } // fim do if
+            return; 
+          } // fim do if
+          
+          // Se o ACK nao e valido, ignora.
+          if (!ackValido) {
             System.out.println("Transmissor SR: ACK Recebido FORA da janela de envio (NS Confirmado=" + nsConfirmado + ", Base=" + base + "). Ignorando.");
             return; 
           } // fim do if
 
-          // Se chegou aqui, o ACK é válido.
+          // Se chegou aqui, o ACK e valido.
           int indiceBuffer = nsConfirmado % TAMANHO_JANELA;
           System.out.println("Transmissor SR: ACK Recebido OK (NS Confirmado=" + nsConfirmado + ", NR=" + nr_bit + ")!");
 
@@ -829,7 +858,7 @@ public class CamadaEnlaceDadosTransmissora {
             base = novaBase;
             System.out.println("Transmissor SR: Nova Base: " + base);
           } // fim do if
-          lock.notifyAll(); // Acorda threads da aplicacao bloqueadas (janela cheia)
+          lock.notifyAll();
         } // fim do synchronized
         break;
     } // fim do switch/case

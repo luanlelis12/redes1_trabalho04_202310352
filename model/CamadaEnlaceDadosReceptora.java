@@ -100,6 +100,11 @@ public class CamadaEnlaceDadosReceptora {
         alert.show();
       });
       erroNoQuadro=false;
+      if (tipoDeControleDeFluxo == 2 && meuTransmissor != null) {
+        System.out.println("Receptor SR: Quadro Corrompido. Reassegurando Transmissor com ACK para #" + nsEsperado);
+        // nsEsperado e o NR que o transmissor deve manter como sua BASE.
+        meuTransmissor.enviarAck(nsEsperado); 
+      } // fim do if
       return;
     } // fim do if
     

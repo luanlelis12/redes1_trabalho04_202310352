@@ -12,7 +12,6 @@ package model;
 import javafx.application.Platform;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
-import util.ConversorStringBinario;
 import util.TabelaCRC;
 
 public class CamadaEnlaceDadosReceptora {
